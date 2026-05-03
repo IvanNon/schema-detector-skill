@@ -34,7 +34,13 @@ Execute these steps in order. Do not skip steps.
 
 ### 2.1 Fetch the page
 
-Use `web_fetch` on the target URL. If `web_fetch` returns empty or CDN-blocked content, fall back to `web_search` on the URL — search snippets and the result page often expose enough HTML for partial schema extraction. Note the fallback in the output.
+Use `web_fetch` on the target URL. Three outcomes are possible:
+
+- **Full success** — raw HTML returned with `<script>` tags intact. Set `fetchMethod: "web_fetch"`. Proceed normally.
+- **Markdown-only / stripped HTML** — the body returned but `<script type="application/ld+json">` blocks were removed by markdown extraction. This is **the dominant failure mode in Claude.ai web_fetch contexts**. Set `fetchMethod: "fetch_partial"`. Do NOT fabricate findings from rendered content. Halt the audit and ask the user to paste the JSON-LD blocks from view-source directly. The audit JSON should still be emitted with `detectedSchemas: []` and a single P0 finding noting the limitation (see §7).
+- **Empty / blocked / 4xx-5xx** — fall back to `web_search` on the URL. Search snippets and result pages occasionally expose schema fragments. Set `fetchMethod: "web_search_fallback"`. If that also returns nothing useful, halt as above.
+
+When the user pastes raw HTML or JSON-LD directly into the conversation, set `fetchMethod: "user_paste"` and skip the fetch entirely — this is the most reliable input mode.
 
 ### 2.2 Extract structured data
 
@@ -52,19 +58,20 @@ Map raw `@type` values to canonical keys using the alias table in `references/sc
 
 Decide what kind of page this is, in this priority order:
 
-1. **Strongest signal — existing schema:** if `Product` is present → product page; if `Article` is present → article page; if `LocalBusiness` is present → local-business page; etc.
+1. **Strongest signal — existing schema:** if `Product` is present → product page; if `Article` is present → article page; if `LocalBusiness` is present → local-business page; if `SoftwareApplication` is present → app/SaaS page; etc.
 2. **URL path heuristics:** `/product/`, `/shop/`, `/p/` → product. `/blog/`, `/article/`, `/news/`, `/post/`, `/insights/` → article. `/event/` → event. `/video/` → video. `/author/`, `/team/` → person. Path is `/` or empty → homepage.
-3. **OpenGraph signals:** `<meta property="og:type" content="article">` → article. `og:type` of `product`, `video`, `profile` → matching types.
-4. **DOM signals:** large `<article>` element with multiple paragraphs → article. `[itemtype*="Product"]` → product.
-5. **Default:** `generic`.
+3. **App/SaaS signals on homepages:** if the page is a homepage AND mentions "download," "app store," "free trial," "sign up," "iOS," "Android," or has links to apps.apple.com or play.google.com → treat as **app/SaaS homepage** (still pageType `homepage` for severity purposes, but trigger the SoftwareApplication check at P0).
+4. **OpenGraph signals:** `<meta property="og:type" content="article">` → article. `og:type` of `product`, `video`, `profile` → matching types.
+5. **DOM signals:** large `<article>` element with multiple paragraphs → article. `[itemtype*="Product"]` → product.
+6. **Default:** `generic`.
 
 Page type **influences severity** for missing-schema findings: missing `Product` schema is `P0` on a product page but `P2` on a homepage. The check rules in §3 spell this out.
 
-### 2.4 Run all 12 checks
+### 2.4 Run all 13 checks
 
 For each canonical schema type below, run the corresponding check from `references/schema-checks.md`. Each check returns 0 or more findings.
 
-The 12 checks plus 1 meta-check:
+The 13 checks plus 1 meta-check:
 
 1. **Invalid JSON-LD meta-check** — runs first; surfaces malformed blocks
 2. Organization
@@ -73,12 +80,13 @@ The 12 checks plus 1 meta-check:
 5. Article (incl. NewsArticle, BlogPosting)
 6. Product
 7. LocalBusiness
-8. Person
-9. Review / AggregateRating
-10. Event
-11. VideoObject
-12. FAQPage (note: deprecated for most sites — flag accordingly)
-13. HowTo (note: deprecated — flag accordingly)
+8. SoftwareApplication (incl. MobileApplication, WebApplication) — **critical for SaaS/app pages**
+9. Person
+10. Review / AggregateRating
+11. Event
+12. VideoObject
+13. FAQPage (note: deprecated for most sites — flag accordingly)
+14. HowTo (note: deprecated — flag accordingly)
 
 Each finding must include:
 - `schemaType` — one of the canonical keys
@@ -94,7 +102,7 @@ Sort all findings by severity: `P0` first, then `P1`, `P2`, `P3`. Within the sam
 
 Compute the summary block:
 - `totalDetectedTypes` — count of distinct canonical schema keys found
-- `totalChecked` — always 12
+- `totalChecked` — always 13
 - `counts` — `{P0, P1, P2, P3}` integer counts
 
 ### 2.6 Emit JSON
@@ -116,6 +124,20 @@ Severity is decided by **what the finding blocks**, not by how "big" the schema 
 
 Page-type modifier: missing schema on the **wrong** page is downgraded one or two severity levels. Missing schema on the **right** page is the canonical severity from `references/schema-checks.md`.
 
+**Page-type expectations at a glance:**
+
+| Page type | What should be P0 if missing | What should be P1 if missing |
+|-----------|-------------------------------|-------------------------------|
+| **homepage** | Organization, WebSite | BreadcrumbList (not always — homepages don't always need crumbs) |
+| **article** | Article (with required props), Person (author entity) | BreadcrumbList, Organization (publisher) |
+| **product** | Product (with required props + offers), Organization | BreadcrumbList, Review/AggregateRating |
+| **local-business** | LocalBusiness (with address), Organization | BreadcrumbList |
+| **app/SaaS homepage** | SoftwareApplication, Organization, WebSite | BreadcrumbList |
+| **event** | Event (with required props), Organization | BreadcrumbList |
+| **video** | VideoObject (with required props), Organization | BreadcrumbList |
+| **person/author bio** | Person (with required props + sameAs) | Organization |
+| **generic** | Organization, WebSite | (most others optional) |
+
 ---
 
 ## 4. The 7-Lever framework
@@ -126,7 +148,7 @@ Every finding maps to one of these levers from the Ygramul methodology:
 |-------|---------------------------|
 | **Lever 1 — Crawl & Indexation** | Malformed JSON-LD that breaks parsing |
 | **Lever 2 — Canonical Architecture** | BreadcrumbList issues — the schema closest to URL hierarchy |
-| **Lever 4 — Content Production & Optimization** | Article, Product, Review, Event, VideoObject, FAQPage, HowTo — the page-content schemas |
+| **Lever 4 — Content Production & Optimization** | Article, Product, SoftwareApplication, Review, Event, VideoObject, FAQPage, HowTo — the page-content schemas |
 | **Lever 6 — Authority & GEO Visibility** | Organization, WebSite, Person, LocalBusiness — the entity-anchor schemas that drive AI citation behavior |
 
 Levers 3, 5, 7 are not used by this skill — they're keyword strategy, programmatic SEO, and analytics, all out of scope for a schema audit.
@@ -143,7 +165,7 @@ Emit exactly this shape. No additional fields, no missing fields. If a section h
   "fetchedAt": "2026-05-02T14:30:00.000Z",
   "pageTitle": "Page title from <title> tag, or null if missing",
   "pageType": "homepage | article | product | local-business | event | video | person | generic",
-  "fetchMethod": "web_fetch | web_search_fallback",
+  "fetchMethod": "web_fetch | web_search_fallback | fetch_partial | user_paste",
   "detectedSchemas": [
     {
       "type": "Article",
@@ -164,7 +186,7 @@ Emit exactly this shape. No additional fields, no missing fields. If a section h
   ],
   "summary": {
     "totalDetectedTypes": 3,
-    "totalChecked": 12,
+    "totalChecked": 13,
     "counts": { "P0": 1, "P1": 0, "P2": 2, "P3": 0 }
   }
 }
@@ -198,11 +220,13 @@ Phrase suggestions naturally: "Want me to run the full tech audit since I found 
 | Situation | Handling |
 |-----------|----------|
 | `web_fetch` returns 404 / 5xx | Tell the user the URL is unreachable, do not emit JSON, ask if they meant a different URL |
+| `web_fetch` returns markdown-only (no `<script>` blocks visible) | **Common in Claude.ai contexts.** Set `fetchMethod: "fetch_partial"`. Emit JSON with `detectedSchemas: []` and a single P0 finding ("Audit incomplete — raw HTML inaccessible") that asks the user to paste the JSON-LD blocks from view-source. Do NOT fabricate findings from rendered content patterns. |
 | `web_fetch` returns empty body but URL is valid | Try `web_search` on the URL as fallback. If that also fails, tell the user the page may be JS-rendered or bot-blocked and recommend they paste the rendered HTML directly |
-| User pastes raw HTML instead of a URL | Skip step 2.1, treat the paste as the page content, set `url` to `null` and `fetchMethod` to `"user_paste"` |
+| User pastes raw HTML or JSON-LD instead of a URL | Skip step 2.1, treat the paste as the page content, set `url` to `null` and `fetchMethod` to `"user_paste"`. This is the most reliable input mode. |
 | Page has zero schema | Still emit the full JSON. `detectedSchemas` is `[]`, `detectedTypeKeys` is `[]`, and the findings will be the page-type-appropriate "missing schema" findings (typically several P1s and P2s, plus P0s if it's a clearly-typed page like product or article) |
 | Page has only valid schema with no findings | Still emit the full JSON. `findings` is `[]`, `counts` is all zeros. This is a legitimate clean result — say so plainly: "No findings — schema implementation is clean." |
 | User asks to audit multiple URLs | This skill is single-URL only by design. Tell the user, recommend `tech-seo-audit` for sitewide work, and offer to run this skill once on the most important URL |
+| Reference files not available (uploaded SKILL.md alone) | The skill works without `references/schema-types.md` and `references/schema-checks.md` but loses determinism — different runs may produce slightly different severity assignments. Tell the user once at the start: "Running without reference files; severities may vary slightly between runs. For deterministic audits, upload the full skill zip with references." |
 
 ---
 

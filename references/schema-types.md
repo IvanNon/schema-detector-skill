@@ -2,7 +2,7 @@
 
 Map raw `@type` values from JSON-LD into canonical keys used by the 12 checks. When a page declares `BlogPosting`, treat it as `Article` for the audit.
 
-## Canonical keys (12)
+## Canonical keys (13)
 
 These are the only valid values for `schemaType` in findings and `detectedTypeKeys` in the output:
 
@@ -13,6 +13,7 @@ BreadcrumbList
 Article
 Product
 LocalBusiness
+SoftwareApplication
 FAQPage
 HowTo
 Person
@@ -84,6 +85,12 @@ VideoObject         → VideoObject
 Movie               → VideoObject
 TVEpisode           → VideoObject
 TVSeries            → VideoObject
+
+SoftwareApplication → SoftwareApplication
+MobileApplication   → SoftwareApplication
+WebApplication      → SoftwareApplication
+GameApplication     → SoftwareApplication
+SocialNetworkingApplication → SoftwareApplication
 ```
 
 ## Special cases

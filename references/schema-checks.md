@@ -15,12 +15,13 @@ The 12 check rule sets plus the meta-check for malformed JSON-LD. Each rule defi
 4. [Article](#4-article)
 5. [Product](#5-product)
 6. [LocalBusiness](#6-localbusiness)
-7. [Person](#7-person)
-8. [Review / AggregateRating](#8-review--aggregaterating)
-9. [Event](#9-event)
-10. [VideoObject](#10-videoobject)
-11. [FAQPage](#11-faqpage)
-12. [HowTo](#12-howto)
+7. [SoftwareApplication](#7-softwareapplication)
+8. [Person](#8-person)
+9. [Review / AggregateRating](#9-review--aggregaterating)
+10. [Event](#10-event)
+11. [VideoObject](#11-videoobject)
+12. [FAQPage](#12-faqpage)
+13. [HowTo](#13-howto)
 
 ---
 
@@ -291,11 +292,58 @@ Either `openingHoursSpecification` or `openingHours` must be present.
 
 ---
 
-## 7. Person
+## 7. SoftwareApplication
+
+**Lever:** Lever 4 — Content Production & Optimization
+
+Applies to canonical type `SoftwareApplication` (which absorbs `MobileApplication`, `WebApplication`, `GameApplication` via the alias table). Critical for SaaS, native mobile apps, and any web-based application — historically underchecked but increasingly important for AI search citation of app-related queries.
+
+### 7.1 Missing entirely on an app/SaaS page
+
+Only fires when the page is identified as an app/SaaS page per §2.3 (URL = homepage, content includes app-store / download / sign-up signals).
+
+**Severity:** P0
+**Title:** `SoftwareApplication schema missing on app/SaaS page`
+**Detail:** This page presents a software application (app, SaaS, or web app) but has no SoftwareApplication schema. This blocks rich results in app-related searches, weakens entity recognition for the app itself (separate from the company brand), and removes a primary citation hook for AI search engines answering app-comparison and recommendation queries.
+**Recommendation:** Add SoftwareApplication JSON-LD with `name`, `applicationCategory` (e.g., "HealthApplication", "LifestyleApplication"), `operatingSystem` (e.g., "iOS, Android, Web"), `offers` (with price or "Free"), and `aggregateRating` if app-store ratings are public. Add `downloadUrl` pointing to the app store listings.
+
+### 7.2 Missing required properties
+
+When SoftwareApplication is present, required: `name`, `applicationCategory`, `operatingSystem`.
+
+**Severity:** P0
+**Title:** `SoftwareApplication missing required: {missing properties}`
+**Detail:** Google requires name, applicationCategory, and operatingSystem for SoftwareApplication schema to be eligible for rich results.
+**Recommendation:** Add the missing properties.
+
+### 7.3 Missing offers
+
+**Severity:** P1
+**Title:** `SoftwareApplication missing offers`
+**Detail:** Without offers, the app's pricing model is invisible to search and AI engines. Even free apps should declare this explicitly.
+**Recommendation:** Add `offers` as an Offer object with `price` (or "0" for free), `priceCurrency`, and ideally `category` (e.g., "Subscription", "Freemium").
+
+### 7.4 Missing aggregateRating
+
+**Severity:** P2
+**Title:** `SoftwareApplication missing aggregateRating`
+**Detail:** App store ratings are a powerful citation signal. If the app has public ratings on the App Store or Google Play, surfacing them in SoftwareApplication schema unlocks star ratings in SERPs and improves AI search citation candidacy for "best app for X" queries.
+**Recommendation:** Add `aggregateRating` with `ratingValue`, `ratingCount`, `bestRating`. Pull from your highest-rated platform; only use real ratings.
+
+### 7.5 Missing downloadUrl
+
+**Severity:** P3
+**Title:** `SoftwareApplication missing downloadUrl`
+**Detail:** downloadUrl explicitly links the schema to the app store listing, helping search engines connect the marketing page to the installable app.
+**Recommendation:** Add `downloadUrl` as an array of URLs pointing to the App Store, Google Play, or direct download endpoints.
+
+---
+
+## 8. Person
 
 **Lever:** Lever 6 — Authority & GEO Visibility
 
-### 7.1 Missing entirely
+### 8.1 Missing entirely
 
 Only fires when `pageType === "person"` or `pageType === "article"`.
 
@@ -312,21 +360,21 @@ Only fires when `pageType === "person"` or `pageType === "article"`.
 
 **Recommendation:** Add Person JSON-LD with `name`, `url`, `image`, `jobTitle`, `sameAs` (LinkedIn, Wikipedia, ORCID, X), and a unique `@id` (e.g., the bio page URL with `#Person` fragment).
 
-### 7.2 Missing required name
+### 8.2 Missing required name
 
 **Severity:** P0
 **Title:** `Person missing name`
 **Detail:** Person schema requires name as the bare minimum identifier.
 **Recommendation:** Add the `name` property.
 
-### 7.3 Missing sameAs
+### 8.3 Missing sameAs
 
 **Severity:** P2
 **Title:** `Person missing sameAs`
 **Detail:** sameAs is the disambiguation lifeline for Person entities. LLMs cross-reference these links to confirm identity and decide whose expertise to cite.
 **Recommendation:** Add `sameAs` as an array including LinkedIn, X, Wikipedia, ORCID, university page, or any verifiable external profile.
 
-### 7.4 Missing jobTitle and worksFor
+### 8.4 Missing jobTitle and worksFor
 
 Both must be missing for this finding to fire.
 
@@ -337,7 +385,7 @@ Both must be missing for this finding to fire.
 
 ---
 
-## 8. Review / AggregateRating
+## 9. Review / AggregateRating
 
 **Lever:** Lever 4 — Content Production & Optimization
 
@@ -345,7 +393,7 @@ This check fires when standalone Review or AggregateRating schema is detected. P
 
 **Do not fire** "missing review schema" findings — absence of review schema is not itself a problem unless reviews are clearly present in the page content (which the audit can't reliably detect).
 
-### 8.1 Review missing required properties
+### 9.1 Review missing required properties
 
 Required: `reviewRating`, `author`.
 
@@ -354,7 +402,7 @@ Required: `reviewRating`, `author`.
 **Detail:** Review schema requires reviewRating and author. Without them the markup is invalid for rich results.
 **Recommendation:** Add the missing properties.
 
-### 8.2 AggregateRating missing required properties
+### 9.2 AggregateRating missing required properties
 
 Required: `ratingValue`, and one of (`reviewCount`, `ratingCount`).
 
@@ -365,11 +413,11 @@ Required: `ratingValue`, and one of (`reviewCount`, `ratingCount`).
 
 ---
 
-## 9. Event
+## 10. Event
 
 **Lever:** Lever 4 — Content Production & Optimization
 
-### 9.1 Missing entirely on an event page
+### 10.1 Missing entirely on an event page
 
 Only fires when `pageType === "event"`.
 
@@ -378,7 +426,7 @@ Only fires when `pageType === "event"`.
 **Detail:** This appears to be an event page with no Event schema. This blocks eligibility for Google Events Search and event rich results.
 **Recommendation:** Add Event JSON-LD with `name`, `startDate` (ISO 8601), `location` (Place or VirtualLocation), and `offers` (if ticketed).
 
-### 9.2 Missing required properties
+### 10.2 Missing required properties
 
 Required: `name`, `startDate`, `location`.
 
@@ -387,14 +435,14 @@ Required: `name`, `startDate`, `location`.
 **Detail:** Event requires name, startDate, and location for rich result eligibility.
 **Recommendation:** Add the missing properties.
 
-### 9.3 Missing endDate
+### 10.3 Missing endDate
 
 **Severity:** P3
 **Title:** `Event missing endDate`
 **Detail:** endDate is recommended and helps with calendar-style listings.
 **Recommendation:** Add `endDate` as an ISO 8601 timestamp.
 
-### 9.4 Missing eventStatus
+### 10.4 Missing eventStatus
 
 **Severity:** P3
 **Title:** `Event missing eventStatus`
@@ -403,11 +451,11 @@ Required: `name`, `startDate`, `location`.
 
 ---
 
-## 10. VideoObject
+## 11. VideoObject
 
 **Lever:** Lever 4 — Content Production & Optimization
 
-### 10.1 Missing entirely on a video page
+### 11.1 Missing entirely on a video page
 
 Only fires when `pageType === "video"`.
 
@@ -416,7 +464,7 @@ Only fires when `pageType === "video"`.
 **Detail:** This page appears to host a video but has no VideoObject schema, blocking eligibility for video rich results and AI video citations.
 **Recommendation:** Add VideoObject JSON-LD with `name`, `description`, `thumbnailUrl`, `uploadDate`, `contentUrl` or `embedUrl`, and `duration` (ISO 8601).
 
-### 10.2 Missing required properties
+### 11.2 Missing required properties
 
 Required: `name`, `description`, `thumbnailUrl`, `uploadDate`.
 
@@ -425,7 +473,7 @@ Required: `name`, `description`, `thumbnailUrl`, `uploadDate`.
 **Detail:** VideoObject requires name, description, thumbnailUrl, and uploadDate for rich result eligibility.
 **Recommendation:** Add the missing properties.
 
-### 10.3 Missing contentUrl and embedUrl
+### 11.3 Missing contentUrl and embedUrl
 
 Both must be missing for this finding to fire.
 
@@ -434,7 +482,7 @@ Both must be missing for this finding to fire.
 **Detail:** Either contentUrl or embedUrl is required so Google can verify the video is playable.
 **Recommendation:** Add `contentUrl` pointing to the raw video file, or `embedUrl` pointing to the embeddable player.
 
-### 10.4 Missing duration
+### 11.4 Missing duration
 
 **Severity:** P2
 **Title:** `VideoObject missing duration`
@@ -443,13 +491,13 @@ Both must be missing for this finding to fire.
 
 ---
 
-## 11. FAQPage
+## 12. FAQPage
 
 **Lever:** Lever 4 — Content Production & Optimization
 
 **Do not fire** "missing FAQPage" findings — most sites should not have FAQPage schema. Only fire findings when FAQPage **is present**.
 
-### 11.1 FAQPage has no questions
+### 12.1 FAQPage has no questions
 
 Fires when FAQPage is present but `mainEntity` is missing or empty.
 
@@ -458,7 +506,7 @@ Fires when FAQPage is present but `mainEntity` is missing or empty.
 **Detail:** FAQPage schema is present but mainEntity contains no Question entries — this is invalid markup.
 **Recommendation:** Either populate `mainEntity` with `Question` objects (each with `acceptedAnswer`) or remove the FAQPage schema entirely.
 
-### 11.2 FAQPage detected — deprecation note
+### 12.2 FAQPage detected — deprecation note
 
 Always fires when FAQPage is present and 11.1 did not fire.
 
@@ -469,13 +517,13 @@ Always fires when FAQPage is present and 11.1 did not fire.
 
 ---
 
-## 12. HowTo
+## 13. HowTo
 
 **Lever:** Lever 4 — Content Production & Optimization
 
 **Do not fire** "missing HowTo" findings. Only fire when HowTo is present.
 
-### 12.1 HowTo detected — deprecation note
+### 13.1 HowTo detected — deprecation note
 
 Always fires when HowTo is present.
 
